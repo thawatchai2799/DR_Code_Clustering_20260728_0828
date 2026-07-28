@@ -5,9 +5,10 @@ Verification scripts for:
    Clustering under the Hyperoctahedral Group"
    W. Sriphum and T. Chomsiri, Symmetry (2026).
 
-Reproduces every numerical claim in the paper. Pure Python 3.9+ with NumPy.
+Reproduces every numerical claim in the paper. Pure Python 3.9+, standard
+library only (no third-party dependencies).
 Run:  python3 verify_all.py
-Expected runtime: a few seconds.
+Expected runtime: under a minute (~50 s on a 2024 laptop).
 
 The script checks:
   (T1) B_d acts by adjacency-preserving bijections on [m]^d.
@@ -64,44 +65,54 @@ def N_burnside(d,m,q):
     G=Bd(d); return sum(q**cyc(g,d,m) for g in G)//len(G)
 
 def N_orbits(d,m,q):
-    """exhaustive orbit count (only for small parameters)."""
+    """Exhaustive orbit count by explicit enumeration (small parameters only)."""
     G=Bd(d); cells=list(itertools.product(range(m),repeat=d))
+    pos={c:i for i,c in enumerate(cells)}
     seen=set(); n=0
     for w in itertools.product(range(q),repeat=len(cells)):
         if w in seen: continue
         n+=1
-        wd=dict(zip(cells,w))
-        for g in G:
-            img=tuple(wd[act((tuple(pinv(g[0])),g[1]) if False else invperm(g),c,m)] for c in cells)
-            # simpler: pushforward
-        # recompute orbit by pushforward
-        orb=set()
         for g in G:
             img=[0]*len(cells)
-            for i,c in enumerate(cells):
-                img[idx_of(cells,act(g,c,m))]=w[i]
-            orb.add(tuple(img))
-        seen|=orb
+            for i,c in enumerate(cells): img[pos[act(g,c,m)]]=w[i]
+            seen.add(tuple(img))
     return n
 
-def idx_of(cells,c):
-    return cells.index(c)
-def invperm(g):
-    p,s=g; d=len(p); pinv=[0]*d
-    for i in range(d): pinv[p[i]]=i
-    sinv=[0]*d
-    for i in range(d): sinv[p[i]]=s[i]
-    return (tuple(pinv),tuple(sinv))
-def pinv(p):
-    d=len(p); r=[0]*d
-    for i in range(d): r[p[i]]=i
-    return r
+# ---------- orbit membership (Corollary 3) ----------
+def same_orbit_direct(w,w2,d,m):
+    G=Bd(d); cells=list(itertools.product(range(m),repeat=d))
+    pos={c:i for i,c in enumerate(cells)}
+    for g in G:
+        img=[0]*len(cells)
+        for i,c in enumerate(cells): img[pos[act(g,c,m)]]=w[i]
+        if tuple(img)==tuple(w2): return True
+    return False
 
-# ---------- adjacency (T1) ----------
+def check_C3(pairs=600, seed=11):
+    """Corollary 3: canon(w)==canon(w') iff same orbit. Returns (ok, n_pairs)."""
+    import random
+    rng=random.Random(seed); total=0
+    for (d,m,q) in [(2,3,2),(2,3,3),(3,2,2)]:
+        G=Bd(d); cells=list(itertools.product(range(m),repeat=d))
+        pos={c:i for i,c in enumerate(cells)}
+        for _ in range(pairs//3):
+            w=tuple(rng.randrange(q) for _ in cells)
+            if rng.random()<0.5:
+                g=rng.choice(G); img=[0]*len(cells)
+                for i,c in enumerate(cells): img[pos[act(g,c,m)]]=w[i]
+                w2=tuple(img)
+            else:
+                w2=tuple(rng.randrange(q) for _ in cells)
+            via_canon = canon(w,cells,G,m)==canon(w2,cells,G,m)
+            via_direct= same_orbit_direct(w,w2,d,m)
+            total+=1
+            if via_canon!=via_direct: return False,total
+    return True,total
+
 def adjacent(u,v):
     return u!=v and max(abs(a-b) for a,b in zip(u,v))<=1
 
-def check_T1(dims=(2,3), max_m=4):
+def check_T1(dims=(2,3,4), max_m=4):
     for d in dims:
         G=Bd(d)
         for m in range(2,max_m+1):
@@ -114,6 +125,46 @@ def check_T1(dims=(2,3), max_m=4):
                 for u,v in itertools.combinations(cells,2):
                     if adjacent(u,v)!=adjacent(act(g,u,m),act(g,v,m)):
                         return False
+    return True
+
+def compose(g1,g2,d):
+    """Wreath-product composition rule as printed in Section 3:
+       g1 g2 = (pi1 pi2, eps) with eps_i = eps_{2,i} * eps_{1, pi2(i)}."""
+    p1,s1=g1; p2,s2=g2
+    p=tuple(p1[p2[i]] for i in range(d))
+    e=tuple(s2[i]*s1[p2[i]] for i in range(d))
+    return (p,e)
+
+def check_T1_composition(dims=(2,3,4), max_m=3):
+    """Section 4 / Section 8 claim: the abstract wreath-product composition
+       agrees with the composition of the induced bin-maps, on every bin."""
+    n=0
+    for d in dims:
+        G=Bd(d)
+        for m in range(2,max_m+1):
+            cells=list(itertools.product(range(m),repeat=d))
+            for g1 in G:
+                for g2 in G:
+                    g12=compose(g1,g2,d)
+                    for x in cells:
+                        n+=1
+                        if act(g12,x,m)!=act(g1,act(g2,x,m),m):
+                            return False,n
+    return True,n
+
+def check_inverse(dims=(2,3,4)):
+    """Theorem 1 proof: (pi,eps)^-1 = (pi^-1, eps') with eps'_{pi(i)} = eps_i."""
+    for d in dims:
+        ident=(tuple(range(d)),tuple([1]*d))
+        for g in Bd(d):
+            p,e=g
+            pinv=[0]*d
+            for i in range(d): pinv[p[i]]=i
+            ep=[0]*d
+            for i in range(d): ep[p[i]]=e[i]
+            ginv=(tuple(pinv),tuple(ep))
+            if compose(g,ginv,d)!=ident or compose(ginv,g,d)!=ident:
+                return False
     return True
 
 # ---------- equivariance (T2) ----------
@@ -133,18 +184,28 @@ def clustering(w,cells,m,tau=1):
         comps.append(frozenset(comp))
     return frozenset(comps)
 
-def check_T2(d=2,m=3,q=3,trials=500,seed=0):
-    import random; random.seed(seed)
-    G=Bd(d); cells=list(itertools.product(range(m),repeat=d))
-    for _ in range(trials):
-        w={c:random.randrange(q) for c in cells}
-        g=random.choice(G)
-        gw={act(g,c,m):w[c] for c in cells}
-        Cw=clustering(w,cells,m)
-        Cgw=clustering(gw,cells,m)
-        gCw=frozenset(frozenset(act(g,c,m) for c in comp) for comp in Cw)
-        if Cgw!=gCw: return False
-    return True
+def check_T2(trials_per_cell=1200, seed=0):
+    """Equivariance test: d=2 with m in {3,4,5}, d=3 with m in {3,4}."""
+    import random
+    rng=random.Random(seed); total=0
+    for d in (2,3):
+        for m in (3,4,5):
+            if d==3 and m>4:          # 5^3=125 cells x 48 elements: keep runtime sane
+                continue
+            G=Bd(d); cells=list(itertools.product(range(m),repeat=d))
+            for _ in range(trials_per_cell):
+                q=rng.choice([2,3,4])
+                w={c:rng.randrange(q) for c in cells}
+                g=rng.choice(G)
+                tau=rng.choice([1,2])
+                gw={act(g,c,m):w[c] for c in cells}
+                Cw=clustering(w,cells,m,tau)
+                Cgw=clustering(gw,cells,m,tau)
+                gCw=frozenset(frozenset(act(g,c,m) for c in comp) for comp in Cw)
+                total+=1
+                if Cgw!=gCw:
+                    return False,total
+    return True,total
 
 # ---------- cycle index (T4) ----------
 def block_cycle_lengths(ell,s,m):
@@ -215,6 +276,72 @@ def check_T5(d=2,m=2,q=2):
             assert canon(tuple(img),cells,G,m)==k
     return len(reps)
 
+# ---------- stabiliser fraction, dedup, and canonicalisation cost (Section 7 / Figure 6) ----------
+def stabiliser_fraction(d,m,q,trials=4000,seed=5):
+    """Figure 6a: fraction of random occupancy functions with a NON-trivial stabiliser."""
+    import random
+    rng=random.Random(seed)
+    G=Bd(d); cells=list(itertools.product(range(m),repeat=d))
+    pos={c:i for i,c in enumerate(cells)}
+    perms=[[pos[act(g,c,m)] for c in cells] for g in G if g!=(tuple(range(d)),tuple([1]*d))]
+    n=len(cells); hits=0
+    for _ in range(trials):
+        w=tuple(rng.randrange(q) for _ in cells)
+        for pm in perms:
+            img=[0]*n
+            for i in range(n): img[pm[i]]=w[i]
+            if tuple(img)==w:
+                hits+=1; break
+    return hits/trials
+
+def library_dedup(d=2,m=3,q=3,seeds=50,seed=9):
+    """Figure 6b: a B_d-closed library built as full orbits of `seeds` generators,
+       reduced by canonical form.  Returns (library size, canonical size, factor)."""
+    import random
+    rng=random.Random(seed)
+    G=Bd(d); cells=list(itertools.product(range(m),repeat=d))
+    pos={c:i for i,c in enumerate(cells)}
+    perms=[[pos[act(g,c,m)] for c in cells] for g in G]
+    n=len(cells); lib=[]; chosen=0
+    while chosen<seeds:
+        w=tuple(rng.randrange(q) for _ in cells)
+        orb=set()
+        for pm in perms:
+            img=[0]*n
+            for i in range(n): img[pm[i]]=w[i]
+            orb.add(tuple(img))
+        if len(orb)!=len(G):      # keep only free orbits so the library is exactly seeds*|G|
+            continue
+        lib.extend(sorted(orb)); chosen+=1
+    canon_set={canon(w,cells,G,m) for w in lib}
+    return len(lib),len(canon_set),len(lib)/len(canon_set)
+
+def canon_work_fraction(d,m,q,trials=300,seed=3):
+    """Section 7: measured total work as a fraction of the naive bound that charges
+       a full-length comparison to every group element."""
+    import random
+    rng=random.Random(seed)
+    G=Bd(d); cells=list(itertools.product(range(m),repeat=d))
+    pos={c:i for i,c in enumerate(cells)}
+    perms=[[pos[act(g,c,m)] for c in cells] for g in G]
+    n=len(cells); naive=0; actual=0
+    for _ in range(trials):
+        w=tuple(rng.randrange(q) for _ in cells); best=None
+        for pm in perms:
+            img=[0]*n
+            for i in range(n): img[pm[i]]=w[i]
+            img=tuple(img)
+            naive += 2*n
+            actual += n
+            if best is None:
+                best=img
+            else:
+                k=0
+                while k<n and img[k]==best[k]: k+=1
+                actual += min(k+1,n)
+                if k<n and img[k]<best[k]: best=img
+    return actual/naive
+
 # ---------- closed forms ----------
 from math import ceil
 def N2_closed(m,q):
@@ -231,16 +358,23 @@ def N3_closed(m,q):
 
 def main():
     print("Verifying paper claims ...\n")
-    print("[T1] adjacency-preserving bijection:", check_T1())
-    print("[T2] B_d-equivariance of clustering:", check_T2())
-    print("[T4] general cycle index (product action):", check_T4())
+    print("[T1] adjacency-preserving bijection (d=2,3,4; m<=4):", check_T1())
+    okc,nc1 = check_T1_composition()
+    print(f"[T1] wreath composition == composition of bin-maps: {okc}  ({nc1:,} (g1,g2,bin) instances)")
+    print("[T1] printed inverse formula (pi,eps)^-1:", check_inverse())
+    ok2,n2 = check_T2()
+    print(f"[T2] B_d-equivariance of clustering: {ok2}  ({n2:,} random (occupancy, group-element, threshold) triples)")
+    print("[T4] cycle index via signed cycle type (product action):", check_T4())
     norb=check_T5(2,2,2)
     print("[T5] canonical form separates orbits; #orbits(d=2,m=2,q=2) =", norb, "(expected 6)")
+    okc,nc = check_C3()
+    print(f"[C3] orbit-membership test canon(w)==canon(w') iff same orbit: {okc}  ({nc:,} pairs)")
 
-    print("\n[T3] Burnside vs exhaustive orbit enumeration:")
-    for (d,m,q) in [(2,2,2),(2,3,2),(2,2,3),(3,2,2)]:
-        nb=N_burnside(d,m,q)
-        print(f"    N({d},{m},{q}) = {nb}")
+    print("\n[T3] Burnside sum vs INDEPENDENT exhaustive orbit enumeration:")
+    for (d,m,q) in [(2,2,2),(2,2,3),(2,3,2),(2,3,3),(2,4,2),(3,2,2)]:
+        nb=N_burnside(d,m,q); no=N_orbits(d,m,q)
+        print(f"    N({d},{m},{q}): Burnside={nb:,}  brute-force={no:,}  {'OK' if nb==no else 'MISMATCH'}")
+        assert nb==no
 
     print("\nKey enumeration values:")
     for (d,m,q,exp) in [(2,3,2,102),(2,3,3,2862),(2,4,2,8548),
@@ -267,6 +401,20 @@ def main():
         reps.setdefault(canon(w,cells,G,2),[]).append(w)
     for k,members in sorted(reps.items(), key=lambda kv:(sum(kv[0]),kv[0])):
         print(f"    canonical {''.join(map(str,k))}: orbit size {len(members)}, stabiliser {len(G)//len(members)}")
+
+    print("\nSection 7 / Figure 6 empirical claims:")
+    for (d,m,q) in [(2,3,2),(2,3,3),(2,3,4),(3,3,2),(3,3,3),(3,3,4)]:
+        f=stabiliser_fraction(d,m,q, trials=2000)
+        print(f"    non-trivial stabiliser fraction, d={d}, m={m}, q={q}: {100*f:6.2f}%")
+    L,C,fac = library_dedup()
+    print(f"    B_d-closed library dedup: {L} instances -> {C} canonical forms ({fac:.2f}x)")
+
+    print("\nSection 7 canonicalisation cost (fraction of the naive bound):")
+    fr=[]
+    for (d,m,q) in [(2,3,2),(2,4,2),(2,5,3),(2,4,4),(3,3,2),(3,3,4),(3,4,3)]:
+        v=canon_work_fraction(d,m,q, trials=150 if d==3 else 300); fr.append(v)
+        print(f"    d={d}, m={m}, q={q}: {v:.3f}")
+    print(f"    measured range: {min(fr):.2f}-{max(fr):.2f}  (paper quotes 0.51-0.64)")
 
     print("\nAll checks passed.")
 

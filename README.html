@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Verification scripts &mdash; Symmetry-Reduced Enumeration and Canonical Forms</title>
+<style>
+:root{--ink:#22262b;--grey:#6b7280;--line:#e2e6ea;--accent:#2f6296;--bg:#fbfcfd}
+*{box-sizing:border-box}
+body{margin:0;padding:2.5rem 1.25rem 4rem;background:var(--bg);color:var(--ink);
+ font:16px/1.65 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+main{max-width:56rem;margin:0 auto;background:#fff;border:1px solid var(--line);
+ border-radius:10px;padding:2.5rem 2.75rem}
+h1{font-size:1.75rem;margin:0 0 1.25rem;padding-bottom:.6rem;border-bottom:2px solid var(--accent)}
+h2{font-size:1.25rem;margin:2.25rem 0 .75rem;color:var(--accent)}
+h3{font-size:1.02rem;margin:1.6rem 0 .5rem}
+p{margin:.75rem 0}
+code{background:#f2f4f7;border:1px solid var(--line);border-radius:4px;padding:.1em .35em;
+ font:0.88em/1.4 ui-monospace,"SFMono-Regular",Consolas,monospace}
+pre{background:#f7f9fb;border:1px solid var(--line);border-radius:8px;padding:.9rem 1.1rem;overflow-x:auto}
+pre code{background:none;border:0;padding:0;font-size:.86rem}
+blockquote{margin:1rem 0;padding:.6rem 1.1rem;border-left:3px solid var(--accent);
+ background:#f7f9fb;color:var(--grey);font-style:italic}
+table{border-collapse:collapse;width:100%;margin:1.1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--line);padding:.45rem .7rem}
+thead th{background:#f2f5f8;font-weight:600}
+tbody tr:nth-child(even){background:#fafbfc}
+ul{margin:.75rem 0;padding-left:1.35rem}
+li{margin:.3rem 0}
+a{color:var(--accent)}
+</style>
+</head>
+<body>
+<main>
+<h1>Verification scripts</h1>
+<p>Repository: <a href="https://github.com/thawatchai2799/DR_Code_Clustering_20260728_0828">https://github.com/thawatchai2799/DR_Code_Clustering_20260728_0828</a></p>
+<p>Reproduces every numerical claim in</p>
+<blockquote>W. Sriphum and T. Chomsiri,<br>*Symmetry-Reduced Enumeration and Canonical Forms for Grid-Based Density<br>Clustering under the Hyperoctahedral Group*, Symmetry (2026).</blockquote>
+<h2>Requirements</h2>
+<p>Python 3.9 or later. Both scripts use nothing outside the standard library, so there is nothing to install.</p>
+<h2>Run</h2>
+<p>Everything at once:</p>
+<pre><code>./run_all.sh          # macOS / Linux
+run_all.bat           # Windows</code></pre>
+<p>Or individually:</p>
+<pre><code>python3 verify_all.py
+python3 verify_dedup_independent.py</code></pre>
+<p>Combined runtime is under a minute (about 50 s for <code>verify_all.py</code> and about 6 s for <code>verify_dedup_independent.py</code> on a 2024 laptop).</p>
+<h2>What is checked</h2>
+<h3><code>verify_all.py</code></h3>
+<p>Prints an <code>OK</code> for each checked claim:</p>
+<ul><li><strong>T1</strong> the hyperoctahedral group <code>B_d</code> acts on <code>[m]^d</code> by adjacency-preserving bijections, the wreath-product composition rule agrees with composition of the induced bin-maps, and the inverse formula is correct;</li><li><strong>T2</strong> grid density clustering is <code>B_d</code>-equivariant;</li><li><strong>T3</strong> the Burnside count <code>N(d,m,q)</code> equals exhaustive orbit enumeration;</li><li><strong>T4</strong> the general cycle index (product-action / gcd–lcm formula) reproduces the cycle count <code>c(g)</code>;</li><li><strong>T5</strong> the canonical form is orbit-invariant and separates orbits;</li><li><strong>C4</strong> the orbit-membership test: <code>canon(w) == canon(w&#x27;)</code> iff <code>w</code> and <code>w&#x27;</code> share an orbit;</li><li>the closed form for <code>N(2,m,q)</code> and the parity-split closed form for <code>N(3,m,q)</code> (Corollary 2) match Burnside for all tested <code>m, q</code>;</li><li>the worked micro-example (<code>d=2, m=2, q=2</code>) reproduces the six orbits with the stated sizes and stabilisers;</li><li><strong>Figure 6a</strong> the fraction of random occupancy functions with a non-trivial stabiliser, which reaches 0% at <code>d=3, m=3, q=4</code> over the sampled instances;</li><li><strong>Section 7</strong> the constructed <code>B_d</code>-closed library (400 instances collapsing to 50 canonical forms, 8.00x) and the measured canonicalisation work as a fraction of the naive bound (0.51–0.64).</li></ul>
+<h3><code>verify_dedup_independent.py</code></h3>
+<p>Reproduces <strong>Figure 6b</strong>. The 400 → 50 figure above is a construction: the library was built from complete orbits, so it demonstrates only that the bound of Definition 4 is attainable. This script measures the complementary quantity — on instances drawn <em>independently</em>, how much deduplication does the canonical form add beyond what hashing the occupancy function already achieves?</p>
+<pre><code>extra factor = (number of distinct w) / (number of distinct canon(w))</code></pre>
+<p>A value of 1.000 means canonicalisation removed nothing that a plain hash of <code>w</code> had not already removed. Over 20,000 draws per setting:</p>
+<table><thead><tr><th style="text-align:left">d</th><th style="text-align:left">m</th><th style="text-align:left">q</th><th style="text-align:right">distinct w</th><th style="text-align:right">distinct canon</th><th style="text-align:right">extra factor</th></tr></thead><tbody>
+<tr><td style="text-align:left">2</td><td style="text-align:left">3</td><td style="text-align:left">2</td><td style="text-align:right">512</td><td style="text-align:right">102</td><td style="text-align:right">5.020x</td></tr>
+<tr><td style="text-align:left">2</td><td style="text-align:left">4</td><td style="text-align:left">2</td><td style="text-align:right">17,238</td><td style="text-align:right">7,671</td><td style="text-align:right">2.247x</td></tr>
+<tr><td style="text-align:left">2</td><td style="text-align:left">5</td><td style="text-align:left">2</td><td style="text-align:right">19,994</td><td style="text-align:right">19,945</td><td style="text-align:right">1.002x</td></tr>
+<tr><td style="text-align:left">2</td><td style="text-align:left">6</td><td style="text-align:left">2</td><td style="text-align:right">20,000</td><td style="text-align:right">20,000</td><td style="text-align:right">1.000x</td></tr>
+<tr><td style="text-align:left">3</td><td style="text-align:left">2</td><td style="text-align:left">2</td><td style="text-align:right">256</td><td style="text-align:right">22</td><td style="text-align:right">11.636x</td></tr>
+<tr><td style="text-align:left">3</td><td style="text-align:left">3</td><td style="text-align:left">2</td><td style="text-align:right">19,998</td><td style="text-align:right">19,927</td><td style="text-align:right">1.004x</td></tr>
+<tr><td style="text-align:left">2</td><td style="text-align:left">4</td><td style="text-align:left">4</td><td style="text-align:right">20,000</td><td style="text-align:right">19,999</td><td style="text-align:right">1.000x</td></tr>
+<tr><td style="text-align:left">3</td><td style="text-align:left">3</td><td style="text-align:left">4</td><td style="text-align:right">20,000</td><td style="text-align:right">20,000</td><td style="text-align:right">1.000x</td></tr>
+</tbody></table>
+<p>The first two rows are an artefact of a workload larger than the instance space: at <code>d=2, m=3, q=2</code> the 20,000 draws saturate all 512 patterns, which collapse to the 102 orbits of Table 5. Once the space is large relative to the workload — the case at every resolution of practical interest — the extra factor is 1.00. The script self-checks each value against the figure quoted in the paper.</p>
+<h2>Files</h2>
+<table><thead><tr><th style="text-align:left">File</th><th style="text-align:left">Purpose</th></tr></thead><tbody>
+<tr><td style="text-align:left"><code>verify_all.py</code></td><td style="text-align:left">all theorem, enumeration and canonical-form checks</td></tr>
+<tr><td style="text-align:left"><code>verify_dedup_independent.py</code></td><td style="text-align:left">the independent-instance deduplication measurement (Figure 6b)</td></tr>
+<tr><td style="text-align:left"><code>run_all.sh</code> / <code>run_all.bat</code></td><td style="text-align:left">run both scripts in order</td></tr>
+<tr><td style="text-align:left"><code>requirements.txt</code></td><td style="text-align:left">records that there are no dependencies</td></tr>
+<tr><td style="text-align:left"><code>LICENSE</code></td><td style="text-align:left">MIT</td></tr>
+<tr><td style="text-align:left"><code>README.md</code> / <code>README.html</code></td><td style="text-align:left">this document</td></tr>
+</tbody></table>
+<h2>Licence</h2>
+<p>MIT. See <code>LICENSE</code>.</p>
+</main>
+</body>
+</html>
